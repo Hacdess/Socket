@@ -1,1 +1,1 @@
-D:\socket_project\server\target\debug\server.exe: D:\socket_project\server\src\main.rs
+D:\Socket\server\target\debug\server.exe: D:\Socket\common\src\lib.rs D:\Socket\server\src\main.rs
