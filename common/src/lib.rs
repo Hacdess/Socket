@@ -19,7 +19,7 @@ impl Packet for FileList {
 
         // Convert all the files' names into a single Stirng, seperated by '\0'
         let names = self.iter()
-                                .fold(String::new(), |acc, (name, _)| acc + "\0" + name);
+            .fold(String::new(), |acc, (name, _)| acc + "\0" + name);
 
         // Convert the string of file names into bytes for ready to send
         let bytes = &names.as_bytes()[1..]; // From 1 to avoid \0
@@ -71,6 +71,7 @@ impl Chunk {
     pub fn end(&self) -> bool {
         self.len < 1024
     }
+
     pub fn read<T: Read>(file: &mut T) -> io::Result<Self> {
         let mut buf = [0; 1024];
         let len = file.read(&mut buf)?;
@@ -96,6 +97,7 @@ impl Packet for Chunk {
             stream.read_exact(&mut buf)?;
             u16::from_be_bytes(buf)
         };
+        
         let end = (header >> 15) != 0;
         let mut buf = [0; 1024];
         let len = if end {

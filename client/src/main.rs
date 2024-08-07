@@ -1,7 +1,11 @@
 use std::{
     fs::{self, File},
     io::{self, Write},
-    net::{Shutdown, TcpStream}
+    net::TcpStream,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc
+    },
 };
 
 use common::{Chunk, DownloadableFile, FileList, Packet};
@@ -59,6 +63,15 @@ fn update_queeue(
 }
 
 fn main() -> std::io::Result<()> {
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+
+    ctrlc::set_handler(move || {
+        println!("\nReceived Ctrl+C! Exiting...");
+        r.store(false, Ordering::SeqCst);
+    })
+    .expect("Error when dealing with Ctrl+C");
+    
     let input_path = "input.txt";
     let output_path = "output/";
 
@@ -96,49 +109,51 @@ fn main() -> std::io::Result<()> {
         .collect::<Vec<_>>()
         .into_boxed_slice();
 
-    loop {
+    while running.load(Ordering::SeqCst) {
         let mut queeue = update_queeue(input_path, &downloadable_files)?;
-        if queeue.is_empty() {
-            break;
-        }
-
+    
         // Xử lý các file trong queeue nếu không trống
         while !queeue.is_empty() {
             let filename = queeue.remove(0);
-
+        
             // Kiểm tra xem file đã tải chưa
-            if let Some(file) = downloadable_files.iter_mut().find(|f| f.file.as_ref().trim() == filename.as_ref().trim() && !f.done) {
+            if let Some(file) = downloadable_files
+                .iter_mut()
+                .find(|f| f.file.as_ref().trim() == filename.as_ref().trim() && !f.done)
+            {
                 stream.write_all(&(filename.len() as usize).to_be_bytes())?;
                 stream.write_all(filename.as_bytes())?;
-
+        
                 // Tạo đường dẫn file đầu ra
                 let output_file_path = format!("{}{}", output_path, filename);
                 let mut output_file = File::create(output_file_path)?;
-
+        
                 let mut progress: usize = 0;
                 let max_size = match file_list.iter().find(|file| file.0 == filename) {
                     Some(file) => file.1,
                     None => {
-                        eprintln!("File not found in the file list: {}", filename);
-                        continue; // Hoặc break, tùy thuộc vào ngữ cảnh
+                        eprintln!("Couldn't get file in the list: {}", filename);
+                        continue; // Bỏ qua tệp này nếu không tìm thấy
                     }
                 };
-
+    
                 // Nhận dữ liệu từ server và ghi vào file
                 loop {
-                    let chunk = Chunk::recieve(&mut stream)?;
+                    let chunk = Chunk::recieve(&mut stream)?;                    
                     progress += chunk.len;
                     if chunk.write(&mut output_file)? {
+                        print!("Downloading {} ..... 100%.\r", filename);
+                        print!("                                                \r");
                         println!("Finshed downloading [{}]", filename);
                         file.done = true;
                         break;
                     }
-                    print!("\rDownloading {} ..... {}%. ", filename, progress * 100 / max_size as usize);
+                    print!("Downloading {} ..... {}%.\r", filename, progress * 100 / max_size as usize);
+                    io::stdout().flush().unwrap();
                 }                
             }
         }
     }
 
-    stream.shutdown(Shutdown::Both).expect("Shutdown failed");
     Ok(())
 }

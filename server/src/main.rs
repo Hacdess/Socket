@@ -1,10 +1,13 @@
 use std::{
-    env, mem,
-    fs::{self, File},
-    io::{self, Read}, 
-    net::{TcpListener, TcpStream},
-    path::Path, thread,
+    env, mem, 
+    fs::{self, File}, 
+    io::{self, Read},
+    net::{Shutdown, TcpListener, TcpStream}, 
+    path::Path
 };
+
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use common::{FileList, Packet, Chunk};
 
@@ -12,6 +15,8 @@ pub struct Config {
     pub ip: String,
     pub port: String,
 }
+
+
 
 impl Config {
     pub fn get() -> Self {
@@ -22,37 +27,30 @@ impl Config {
     }
 }
 
-fn parse_size(size_str: &str) -> Option<u64> {
-    let size_str = size_str.trim().to_uppercase();
-    let (value_str, unit) = size_str.split_at(size_str.len() - 2);
-    
-    let value = value_str.parse::<u64>().ok()?;
-    match unit {
-        "B" => Some(value),
-        "KB" => Some(value * 1024),   
-        "MB" => Some(value * 1024 * 1024),
-        "GB" => Some(value * 1024 * 1024 * 1024),
-        _ => None,
-    }
-}
-
 fn get_files(file_name_path: &Path) -> Result<FileList, io::Error> {
     let content = fs::read_to_string(file_name_path)?;
 
-    Ok(content.lines() // Break to lines
+    Ok(content
+        .lines() // Break to lines
         .filter_map(|line| {             // to deal with
             let parts: Vec<&str> = line.split_whitespace().collect(); // split between name & size
             if parts.len() != 2 { // Incorrect
                 return None;
             }
 
-            let name = parts[0];
-            let size = parse_size(parts[1])?;
+            if parts.len() != 2 {
+                return None;
+            }
             
+            let name = parts[0];
             // Kiểm tra nếu tên không chứa ký tự null
             if name.contains('\0') {
                 return None;
             }
+            
+            let size = fs::metadata(format!("resources/{}", name)).unwrap().len();
+    
+        
 
             Some((name.into(), size))
         })
@@ -70,7 +68,6 @@ fn handle_client(mut stream: TcpStream, order: u8, files: FileList) -> io::Resul
     loop {
         let mut buf = [0; mem::size_of::<usize>()];
         if stream.read_exact(&mut buf).is_err() {
-            println!("All done");
             break; // Nếu không còn dữ liệu để đọc, thoát vòng lặp
         }
 
@@ -101,52 +98,33 @@ fn handle_client(mut stream: TcpStream, order: u8, files: FileList) -> io::Resul
         }
     }
 
+    println!("All done with client {order}\nClosed connection with client {order}\n");
+
     Ok(())
 }
 
-
 fn main() -> io::Result<()> {
     let file_name_path = Path::new("files.txt");
-    //let files_path = Path::new("resources");
 
     let files = get_files(file_name_path)?;
 
     let config = Config::get();
     let address = format!("{}:{}", config.ip, config.port);
 
-    let listener = TcpListener::bind(&address)?;
+    let listener = TcpListener::bind(&address).expect("Failed to bind TCP listener.");
     println!("Server is listening on {}", address);
 
     let mut count: u8 = 1;
-    let mut active_connection: Option<TcpStream> = None;
 
     for stream in listener.incoming() {
-        match stream {
-            Ok(new_stream) => {
-                if active_connection.is_none() {
-                    dbg!(&active_connection);
-                    // Nếu không có kết nối nào đang hoạt động, chấp nhận kết nối mới
-                    active_connection = Some(new_stream);
-                    let stream = active_connection.take().unwrap();
-                    let files = files.clone();
-
-                    thread::spawn(move || {
-                        if let Err(e) = handle_client(stream, count, files) {
-                            eprintln!("Failed to handle client {}: {}", count, e);
-                        }
-                    });
-
-                    count += 1;
-                // Nếu đã có kết nối hoạt động, từ chối kết nối mới
-                } else {
-                    let _ = new_stream.shutdown(std::net::Shutdown::Both);
-                    eprintln!("Connection refused because another connection is active.");
-                }
-            }
-            Err(e) => eprintln!("Failed to accept connection: {}", e),
-        }
-
-        thread::sleep(std::time::Duration::from_secs(1));
+        // Kiểm tra trạng thái running trước khi xử lý kết nối
+            
+        let stream = stream.unwrap();
+        let files = files.clone();
+    
+        handle_client(stream, count, files).expect("Can't handle client {count}");
+    
+        count += 1;
     }
 
     Ok(())
