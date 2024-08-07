@@ -1,15 +1,12 @@
 use std::{
-    fs,
-    fs::File,
-    io::{self, Read, Write},
+    env, mem,
+    fs::{self, File},
+    io::{self, Read}, 
     net::{TcpListener, TcpStream},
-    path::Path,
-    sync::{Arc, Mutex},
-    thread,
-    env,
+    path::Path, thread,
 };
 
-use common::FileList;
+use common::{FileList, Packet, Chunk};
 
 pub struct Config {
     pub ip: String,
@@ -42,7 +39,7 @@ fn parse_size(size_str: &str) -> Option<u64> {
 fn get_files(file_name_path: &Path) -> Result<FileList, io::Error> {
     let content = fs::read_to_string(file_name_path)?;
 
-    let files: FileList = content.lines() // Break to lines
+    Ok(content.lines() // Break to lines
         .filter_map(|line| {             // to deal with
             let parts: Vec<&str> = line.split_whitespace().collect(); // split between name & size
             if parts.len() != 2 { // Incorrect
@@ -60,20 +57,57 @@ fn get_files(file_name_path: &Path) -> Result<FileList, io::Error> {
             Some((name.into(), size))
         })
         .collect::<Vec<_>>()
-        .into_boxed_slice();
-
-    Ok(files)
+        .into_boxed_slice())
 }
 
 fn handle_client(mut stream: TcpStream, order: u8, files: FileList) -> io::Result<()> {
-    stream.write_all(b"buff")?;
+    println!("Connected to client {order}");
+
+    dbg!(&stream);
+
+    files.send(&mut stream)?;
+
+    loop {
+        let mut buf = [0; mem::size_of::<usize>()];
+        if stream.read_exact(&mut buf).is_err() {
+            println!("All done");
+            break; // Nếu không còn dữ liệu để đọc, thoát vòng lặp
+        }
+
+        let filename_len = usize::from_be_bytes(buf);
+
+        let mut filename_buf = vec![0; filename_len];
+        stream.read_exact(&mut filename_buf)?; // Đọc tên file từ stream
+        let filename = String::from_utf8(filename_buf).unwrap();
+
+        if filename.is_empty() {
+            continue;
+        }
+
+        let file_info = files.iter().find(|file| *file.0 == filename).ok_or_else(|| {
+            io::Error::new(io::ErrorKind::NotFound, "Requested file not found")
+        })?;
+
+        let file_path = Path::new("resources/").join(&*file_info.0);
+        let mut file = File::open(file_path)?;
+
+        loop {
+            let chunk = Chunk::read(&mut file)?;
+            chunk.send(&mut stream)?;
+            if chunk.end() {
+                println!("Finished sending file [{}]", file_info.0);
+                break;
+            }
+        }
+    }
 
     Ok(())
 }
 
+
 fn main() -> io::Result<()> {
     let file_name_path = Path::new("files.txt");
-    //let files_path = Path::new("../items");
+    //let files_path = Path::new("resources");
 
     let files = get_files(file_name_path)?;
 
@@ -90,6 +124,7 @@ fn main() -> io::Result<()> {
         match stream {
             Ok(new_stream) => {
                 if active_connection.is_none() {
+                    dbg!(&active_connection);
                     // Nếu không có kết nối nào đang hoạt động, chấp nhận kết nối mới
                     active_connection = Some(new_stream);
                     let stream = active_connection.take().unwrap();
@@ -102,8 +137,8 @@ fn main() -> io::Result<()> {
                     });
 
                     count += 1;
+                // Nếu đã có kết nối hoạt động, từ chối kết nối mới
                 } else {
-                    // Nếu đã có kết nối hoạt động, từ chối kết nối mới
                     let _ = new_stream.shutdown(std::net::Shutdown::Both);
                     eprintln!("Connection refused because another connection is active.");
                 }
@@ -111,10 +146,7 @@ fn main() -> io::Result<()> {
             Err(e) => eprintln!("Failed to accept connection: {}", e),
         }
 
-        // Đợi một chút trước khi chấp nhận kết nối mới
-        // Điều này giúp tránh lặp liên tục và cho phép kết nối hiện tại hoàn tất
-        // Có thể điều chỉnh thời gian tùy theo yêu cầu
-        //thread::sleep(std::time::Duration::from_secs(1));
+        thread::sleep(std::time::Duration::from_secs(1));
     }
 
     Ok(())
