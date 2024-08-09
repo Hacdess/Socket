@@ -2,7 +2,7 @@ use std::{fs::File, io::{self, Read, Write}, mem, str};
 
 pub trait Packet {
     fn send<T: Write>(&self, stream: &mut T) -> io::Result<()>;
-    fn recieve<T: Read>(stream: &mut T) -> io::Result<Self> where Self: Sized;
+    fn receive<T: Read>(stream: &mut T) -> io::Result<Self> where Self: Sized;
 }
 
 pub type FileList = Box<[(Box<str>, u64)]>;
@@ -29,7 +29,7 @@ impl Packet for FileList {
         stream.write_all(&bytes)
     }
 
-    fn recieve<T: Read>(stream: &mut T) -> io::Result<Self> {
+    fn receive<T: Read>(stream: &mut T) -> io::Result<Self> {
         // Get number of files in the list
         let len = {
             let mut buf = [0; mem::size_of::<usize>()];
@@ -91,7 +91,7 @@ impl Packet for Chunk {
         stream.write_all(&self.buf[..self.len])
     }
 
-    fn recieve<T: Read>(stream: &mut T) -> io::Result<Self> {
+    fn receive<T: Read>(stream: &mut T) -> io::Result<Self> {
         let header = {
             let mut buf = [0; mem::size_of::<u16>()];
             stream.read_exact(&mut buf)?;

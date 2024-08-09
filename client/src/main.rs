@@ -93,7 +93,7 @@ fn main() -> std::io::Result<()> {
 
     dbg!(&stream);
 
-    let file_list = FileList::recieve(&mut stream)?;
+    let file_list = FileList::receive(&mut stream)?;
     println!("Availabe files for downloading:");
     for (filename, filesize) in file_list.iter() {
         println!("{} {}", filename, format_size(*filesize));
@@ -139,7 +139,7 @@ fn main() -> std::io::Result<()> {
     
                 // Nhận dữ liệu từ server và ghi vào file
                 loop {
-                    let chunk = Chunk::recieve(&mut stream)?;                    
+                    let chunk = Chunk::receive(&mut stream)?;                    
                     progress += chunk.len;
                     if chunk.write(&mut output_file)? {
                         print!("Downloading {} ..... 100%.\r", filename);
@@ -149,7 +149,8 @@ fn main() -> std::io::Result<()> {
                         break;
                     }
                     print!("Downloading {} ..... {}%.\r", filename, progress * 100 / max_size as usize);
-                    io::stdout().flush().unwrap();
+                    io::stdout().flush()?;
+                    
                 }                
             }
         }
