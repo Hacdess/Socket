@@ -1,4 +1,4 @@
-use std::{fs::File, io::{self, Read, Write}, mem, str};
+use std::{io::{self, Read, Write}, mem, str};
 
 pub trait Packet {
     fn send<T: Write>(&self, stream: &mut T) -> io::Result<()>;
@@ -21,12 +21,16 @@ impl Packet for FileList {
         let names = self.iter()
             .fold(String::new(), |acc, (name, _)| acc + "\0" + name);
 
-        // Convert the string of file names into bytes for ready to send
-        let bytes = &names.as_bytes()[1..]; // From 1 to avoid \0
-        // Announce the converted string's size
-        stream.write_all(&(bytes.len() as usize).to_be_bytes())?;
-        // Send the string files' names to stream
-        stream.write_all(&bytes)
+        if names.is_empty() {
+            stream.write_all(&0_usize.to_be_bytes())
+        } else {
+            // Convert the string of file names into bytes for ready to send
+            let bytes = &names.as_bytes()[1..]; // From 1 to avoid \0
+            // Announce the converted string's size
+            stream.write_all(&(bytes.len() as usize).to_be_bytes())?;
+            // Send the string files' names to stream
+            stream.write_all(&bytes)
+        }
     }
 
     fn receive<T: Read>(stream: &mut T) -> io::Result<Self> {
@@ -53,6 +57,7 @@ impl Packet for FileList {
 
         let mut buf = vec![0; names_size];
         stream.read_exact(&mut buf)?; // Store the whole files' names list into buf as bytes
+        
         // Convert buf into list of files' names as iterator of pointer to str
         let filenames = str::from_utf8(&buf).unwrap()
             .splitn(len, '\0').map(|name| name.into());

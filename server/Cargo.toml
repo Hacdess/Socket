@@ -5,4 +5,4 @@ edition = "2021"
 
 [dependencies]
 common = {path = "../common"}
-ctrlc = "3.2"
+ctrlc = "3.4.4"

@@ -1,11 +1,8 @@
 use std::{
-    fs::{self, File},
-    io::{self, Write},
-    net::TcpStream,
-    sync::{
+    fs::{self, File}, io::{self, Write}, net::TcpStream, os::windows::process, sync::{
         atomic::{AtomicBool, Ordering},
         Arc
-    },
+    }
 };
 
 use common::{Chunk, DownloadableFile, FileList, Packet};
@@ -63,40 +60,37 @@ fn update_queeue(
 }
 
 fn main() -> std::io::Result<()> {
-    let running = Arc::new(AtomicBool::new(true));
-    let r = running.clone();
-
-    ctrlc::set_handler(move || {
-        println!("\nReceived Ctrl+C! Exiting...");
-        r.store(false, Ordering::SeqCst);
-    })
-    .expect("Error when dealing with Ctrl+C");
-    
     let input_path = "input.txt";
     let output_path = "output/";
 
+    let stopping = Arc::new(AtomicBool::new(false));
+    let s = stopping.clone();
+
+    if let Err(err) = ctrlc::set_handler(move || s.store(true, Ordering::SeqCst)) {
+        eprintln!("ERROR: failed to set ctrl-c handler: {err}");
+    }
+
     // Find and connect to server
-    let mut stream = loop {
+    let address = {
         let ip = read_typed("Input IP address: ");
         let port = read_typed("Input port: ");
-        let address = format!("{}:{}", ip, port);
-
-        // Thử kết nối tới server
-        match TcpStream::connect(&address) {
-            Ok(s) => {
-                println!("Connected to the server at {}", address);
-                break s; // Kết nối thành công, thoát vòng lặp và trả về TcpStream
-            }
-            Err(_) => println!("Couldn't connect to the server at {}. Please try again.", address),
-        }
+        format!("{}:{}", ip, port)
     };
+
+    let mut stream = TcpStream::connect(address)
+                       .expect("Couldn't connect to the server...");
 
     dbg!(&stream);
 
-    let file_list = FileList::receive(&mut stream)?;
     println!("Availabe files for downloading:");
-    for (filename, filesize) in file_list.iter() {
-        println!("{} {}", filename, format_size(*filesize));
+    let file_list = FileList::receive(&mut stream)?;
+    if file_list.is_empty() {
+        println!("No available file for downloading!\nProgram exiting...");
+        return Ok(());
+    } else {
+        for (filename, filesize) in file_list.iter() {
+            println!("{} {}", filename, format_size(*filesize));
+        }
     }
     println!();
 
@@ -109,18 +103,26 @@ fn main() -> std::io::Result<()> {
         .collect::<Vec<_>>()
         .into_boxed_slice();
 
-    while running.load(Ordering::SeqCst) {
+    loop {
+        if stopping.load(Ordering::SeqCst) {
+            break;
+        }
+
         let mut queeue = update_queeue(input_path, &downloadable_files)?;
     
         // Xử lý các file trong queeue nếu không trống
         while !queeue.is_empty() {
+            if stopping.load(Ordering::SeqCst) {
+                break;
+            }
+
             let filename = queeue.remove(0);
         
             // Kiểm tra xem file đã tải chưa
             if let Some(file) = downloadable_files
                 .iter_mut()
-                .find(|f| f.file.as_ref().trim() == filename.as_ref().trim() && !f.done)
-            {
+                .find(|f| f.file.as_ref().trim() == filename.as_ref().trim() && !f.done
+            ) {
                 stream.write_all(&(filename.len() as usize).to_be_bytes())?;
                 stream.write_all(filename.as_bytes())?;
         
@@ -139,16 +141,20 @@ fn main() -> std::io::Result<()> {
     
                 // Nhận dữ liệu từ server và ghi vào file
                 loop {
+                    if stopping.load(Ordering::SeqCst) {
+                        break;
+                    }
+
                     let chunk = Chunk::receive(&mut stream)?;                    
                     progress += chunk.len;
                     if chunk.write(&mut output_file)? {
-                        print!("Downloading {} ..... 100%.\r", filename);
+                        print!("\rDownloading {} ..... 100.00%\n", filename);
                         print!("                                                \r");
                         println!("Finshed downloading [{}]", filename);
                         file.done = true;
                         break;
                     }
-                    print!("Downloading {} ..... {}%.\r", filename, progress * 100 / max_size as usize);
+                    print!("\rDownloading {} ..... {:.2}%", filename, progress as f32 * 100.0 / max_size as f32);
                     io::stdout().flush()?;
                     
                 }                
@@ -156,5 +162,6 @@ fn main() -> std::io::Result<()> {
         }
     }
 
+    println!("\n\nProgram is exiting...");
     Ok(())
 }

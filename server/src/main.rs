@@ -6,9 +6,6 @@ use std::{
     path::Path
 };
 
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-
 use common::{FileList, Packet, Chunk};
 
 pub struct Config {
@@ -61,7 +58,7 @@ fn get_files(file_name_path: &Path) -> Result<FileList, io::Error> {
 }
 
 fn handle_client(mut stream: TcpStream, order: u8, files: FileList) -> io::Result<()> {
-    println!("Connected to client {order}");
+    println!("Connected to [Client {order}].");
 
     dbg!(&stream);
 
@@ -106,12 +103,26 @@ fn handle_client(mut stream: TcpStream, order: u8, files: FileList) -> io::Resul
         }
     }
 
-    println!("Client {order} quited the server.\nClosed connection with client {order}.\n");
+    println!("[Client {order}] quited the server.\nClosed connection with [Client {order}].\n");
 
     Ok(())
 }
 
 fn main() -> io::Result<()> {
+    let config = Config::get();
+    let address = format!("{}:{}", config.ip, config.port);
+
+    let listener = match TcpListener::bind(&address) {
+        Ok(listener) => {
+            println!("Server is listening on {}...\n", address);
+            listener
+        },
+        Err(err) => {
+            eprintln!("ERROR: Failed to bind TCP listener: {err}\n");
+            return Err(err);
+        },
+    };
+
     let file_name_path = Path::new("files.txt");
 
     let files = match get_files(file_name_path) {
@@ -121,20 +132,6 @@ fn main() -> io::Result<()> {
             return Err(err);
         }
     };
-
-    let config = Config::get();
-    let address = format!("{}:{}", config.ip, config.port);
-
-    let listener = match TcpListener::bind(&address) {
-        Ok(listener) => {
-            println!("Server is listening on {}.\n", address);
-            listener
-        },
-        Err(err) => {
-            eprintln!("ERROR: Failed to bind TCP listener: {err}\n");
-            return Err(err);
-        },
-    };
     
     let mut count: u8 = 1;
 
@@ -143,7 +140,7 @@ fn main() -> io::Result<()> {
             Ok(stream) => {
                 let files = files.clone();
                 if let Err(err) = handle_client(stream, count, files) {
-                    eprintln!("ERROR: Failed to handle client {count}: {err}.\n");
+                    eprintln!("ERROR: Failed to handle [Client {count}]: {err}.\n");
                     continue;
                 }
                 count += 1;
