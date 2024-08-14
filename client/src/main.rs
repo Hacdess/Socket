@@ -5,7 +5,7 @@ use std::{
     }
 };
 
-use common::{Chunk, DownloadableFile, FileList, Packet};
+use common::{Chunk, DownloadableFile, FileList, Packet, DEFAULT_PORT};
 
 fn read_typed(prompt: &str) -> String {
     let mut input = String::new();
@@ -73,8 +73,7 @@ fn main() -> std::io::Result<()> {
     // Find and connect to server
     let address = {
         let ip = read_typed("Input IP address: ");
-        let port = read_typed("Input port: ");
-        format!("{}:{}", ip, port)
+        format!("{}:{}", ip, DEFAULT_PORT)
     };
 
     let mut stream = TcpStream::connect(address)
@@ -83,7 +82,7 @@ fn main() -> std::io::Result<()> {
     dbg!(&stream);
 
     println!("Availabe files for downloading:");
-    let file_list = FileList::receive(&mut stream)?;
+    let file_list = FileList::recv(&mut stream)?;
     if file_list.is_empty() {
         println!("No available file for downloading!\nProgram exiting...");
         return Ok(());
@@ -145,7 +144,7 @@ fn main() -> std::io::Result<()> {
                         break;
                     }
 
-                    let chunk = Chunk::receive(&mut stream)?;                    
+                    let chunk = Chunk::recv(&mut stream)?;                    
                     progress += chunk.len;
                     if chunk.write(&mut output_file)? {
                         print!("\rDownloading {} ..... 100.00%\n", filename);

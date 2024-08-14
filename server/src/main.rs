@@ -6,7 +6,7 @@ use std::{
     path::Path
 };
 
-use common::{FileList, Packet, Chunk};
+use common::{FileList, Packet, Chunk, DEFAULT_PORT};
 
 pub struct Config {
     pub ip: String,
@@ -16,8 +16,16 @@ pub struct Config {
 impl Config {
     pub fn get() -> Self {
         Self {
-            ip: env::var("IP").unwrap_or_else(|_| "127.0.0.1".into()),
-            port: env::var("PORT").unwrap_or_else(|_| "3000".into()),
+            ip: if let Ok(ip) = env::var("IP") {
+                ip.into()
+            } else {
+                "0.0.0.0".into()
+            },
+            port: if let Ok(port) = env::var("PORT") {
+                port.into()
+            } else {
+                DEFAULT_PORT.into()
+            },
         }
     }
 }
