@@ -1,5 +1,5 @@
 use std::{
-    fs::{self, File}, io::{self, Write}, net::TcpStream, os::windows::process, sync::{
+    fs::{self, File}, io::{self, Write}, net::TcpStream, sync::{
         atomic::{AtomicBool, Ordering},
         Arc
     }
@@ -161,6 +161,7 @@ fn main() -> std::io::Result<()> {
         }
     }
 
+    stream.write_all(&[0])?;
     println!("\n\nProgram is exiting...");
     Ok(())
 }

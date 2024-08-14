@@ -57,7 +57,13 @@ fn get_files(file_name_path: &Path) -> Result<FileList, io::Error> {
                 return None;
             }
             
-            let size = fs::metadata(format!("resources/{}", name)).unwrap().len();
+            let size = match fs::metadata(format!("resources/{}", name)) {
+                Ok(metadata) => metadata.len(),
+                Err(err) => {
+                    eprintln!("ERROR: Failed to get size of file {}: {err}", name);
+                    return None;
+                }
+            };
     
             Some((name.into(), size))
         })
@@ -136,7 +142,7 @@ fn main() -> io::Result<()> {
     let files = match get_files(file_name_path) {
         Ok(files) => files,
         Err(err) => {
-            eprintln!("ERROR: failed to get files list: {err}");
+            eprintln!("ERROR: Failed to get files list: {err}");
             return Err(err);
         }
     };
