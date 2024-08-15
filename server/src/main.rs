@@ -150,6 +150,7 @@ fn main() -> io::Result<()> {
     let mut count: u8 = 1;
 
     for stream in listener.incoming() {
+        dbg!(&listener,&stream);
         match stream {
             Ok(stream) => {
                 let files = files.clone();

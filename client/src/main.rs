@@ -76,14 +76,14 @@ fn main() -> std::io::Result<()> {
         format!("{}:{}", ip, DEFAULT_PORT)
     };
 
-    let mut stream = TcpStream::connect(&address)
+    let mut stream: TcpStream = TcpStream::connect(&address)
                        .expect("Couldn't connect to the server...");
 
-    println!("Waiting for connecting to server at {address}\n");
+    dbg!(&stream);
 
     let file_list = FileList::recv(&mut stream)?;
 
-    println!("Connected to server at for downloading:{address}\n");
+    println!("Connected to server at {address}\n");
     println!("Availabe files for downloading:");
     if file_list.is_empty() {
         println!("No available file for downloading!\nProgram exiting...");
