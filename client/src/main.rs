@@ -30,25 +30,21 @@ fn update_queeue(
     input_path: &str,
     downloadable_files: &Box<[DownloadableFile]>,
 ) -> io::Result<Vec<Box<str>>> {
-    // Đọc nội dung của file và xử lý lỗi nếu có
     let reader = fs::read_to_string(input_path)?;
 
-    // Chuyển đổi các tên file thành Vec<Box<str>>
     let files: Vec<Box<str>> = reader
         .lines()
         .filter_map(|line| {
-            let filename = line.split_whitespace().next(); // Lấy phần tử đầu tiên
-            filename.map(|f| f.to_string().into_boxed_str()) // Chuyển đổi Option<&str> thành Option<Box<str>>
+            let filename = line.split_whitespace().next();
+            filename.map(|f| f.to_string().into_boxed_str())
         })
         .collect();
 
-    let mut queeue: Vec<Box<str>> = Vec::new(); // Khởi tạo Vec để chứa các tên file cần xử lý
+    let mut queeue: Vec<Box<str>> = Vec::new();
 
     for file in files.iter() {
-        // So sánh Box<str> với Box<str>
         let file_found = downloadable_files.iter().find(|df| df.file == *file);
 
-        // Nếu tìm thấy file và done là false thì thêm vào queeue
         if let Some(df) = file_found {
             if !df.done {
                 queeue.push(file.clone());
@@ -56,7 +52,7 @@ fn update_queeue(
         }
     }
 
-    Ok(queeue) // Trả về kết quả dưới dạng Result
+    Ok(queeue)
 }
 
 fn main() -> std::io::Result<()> {
@@ -70,7 +66,6 @@ fn main() -> std::io::Result<()> {
         eprintln!("ERROR: failed to set ctrl-c handler: {err}");
     }
 
-    // Find and connect to server
     let address = {
         let ip = read_typed("Input IP address: ");
         format!("{}:{}", ip, DEFAULT_PORT)
@@ -109,7 +104,6 @@ fn main() -> std::io::Result<()> {
 
         let mut queeue = update_queeue(input_path, &downloadable_files)?;
     
-        // Xử lý các file trong queeue nếu không trống
         while !queeue.is_empty() {
             if stopping.load(Ordering::SeqCst) {
                 break;
@@ -119,7 +113,6 @@ fn main() -> std::io::Result<()> {
             
             let filename = queeue.remove(0);
         
-            // Kiểm tra xem file đã tải chưa
             if let Some(file) = downloadable_files
                 .iter_mut()
                 .find(|f| f.file.as_ref().trim() == filename.as_ref().trim() && !f.done
@@ -127,7 +120,6 @@ fn main() -> std::io::Result<()> {
                 stream.write_all(&(filename.len() as usize).to_be_bytes())?;
                 stream.write_all(filename.as_bytes())?;
         
-                // Tạo đường dẫn file đầu ra
                 let output_file_path = format!("{}{}", output_path, filename);
                 let mut output_file = File::create(output_file_path)?;
         
@@ -136,11 +128,10 @@ fn main() -> std::io::Result<()> {
                     Some(file) => file.1,
                     None => {
                         eprintln!("Couldn't get file in the list: {}", filename);
-                        continue; // Bỏ qua tệp này nếu không tìm thấy
+                        continue;
                     }
                 };
     
-                // Nhận dữ liệu từ server và ghi vào file
                 loop {
                     if stopping.load(Ordering::SeqCst) {
                         break;

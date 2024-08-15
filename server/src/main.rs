@@ -40,10 +40,10 @@ fn get_files(file_name_path: &Path) -> Result<FileList, io::Error> {
     };
 
     Ok(content
-        .lines() // Break to lines
-        .filter_map(|line| {             // to deal with
-            let parts: Vec<&str> = line.split_whitespace().collect(); // split between name & size
-            if parts.len() != 2 { // Incorrect
+        .lines()
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() != 2 {
                 return None;
             }
 
@@ -52,7 +52,6 @@ fn get_files(file_name_path: &Path) -> Result<FileList, io::Error> {
             }
             
             let name = parts[0];
-            // Kiểm tra nếu tên không chứa ký tự null
             if name.contains('\0') {
                 return None;
             }
@@ -90,7 +89,7 @@ fn handle_client(mut stream: TcpStream, order: u8, files: FileList) -> io::Resul
         let filename_len = usize::from_be_bytes(buf);
 
         let mut filename_buf = vec![0; filename_len];
-        stream.read_exact(&mut filename_buf)?; // Đọc tên file từ stream
+        stream.read_exact(&mut filename_buf)?;
 
         let filename = String::from_utf8(filename_buf).unwrap();
 
