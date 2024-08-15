@@ -79,8 +79,6 @@ fn main() -> std::io::Result<()> {
     let mut stream: TcpStream = TcpStream::connect(&address)
                        .expect("Couldn't connect to the server...");
 
-    dbg!(&stream);
-
     let file_list = FileList::recv(&mut stream)?;
 
     println!("Connected to server at {address}\n");
@@ -117,6 +115,8 @@ fn main() -> std::io::Result<()> {
                 break;
             }
 
+            stream.write_all(&[1])?;
+            
             let filename = queeue.remove(0);
         
             // Kiểm tra xem file đã tải chưa
@@ -164,6 +164,7 @@ fn main() -> std::io::Result<()> {
     }
 
     stream.write_all(&[0])?;
-    println!("\n\nProgram is exiting...");
+    println!();
+    println!("Program is exiting...");
     Ok(())
 }

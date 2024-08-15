@@ -103,7 +103,6 @@ impl Packet for Chunk {
     }
 }
 
-#[derive(Debug)]
 pub struct DownloadableFile {
     pub done: bool,
     pub file: Box<str>

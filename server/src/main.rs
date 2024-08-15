@@ -74,20 +74,24 @@ fn get_files(file_name_path: &Path) -> Result<FileList, io::Error> {
 fn handle_client(mut stream: TcpStream, order: u8, files: FileList) -> io::Result<()> {
     println!("Connected to [Client {order}].");
 
-    dbg!(&stream);
-
     files.send(&mut stream)?;
 
     loop {
-        let mut buf = [0; mem::size_of::<usize>()];
-        if stream.read_exact(&mut buf).is_err() {
-            break; // Nếu không còn dữ liệu để đọc, thoát vòng lặp
+        let mut next = [0];
+        stream.read_exact(&mut next)?;
+
+        if next == [0] {
+            break;
         }
+
+        let mut buf = [0; mem::size_of::<usize>()];
+        stream.read_exact(&mut buf)?;
 
         let filename_len = usize::from_be_bytes(buf);
 
         let mut filename_buf = vec![0; filename_len];
         stream.read_exact(&mut filename_buf)?; // Đọc tên file từ stream
+
         let filename = String::from_utf8(filename_buf).unwrap();
 
         if filename.is_empty() {
@@ -150,7 +154,6 @@ fn main() -> io::Result<()> {
     let mut count: u8 = 1;
 
     for stream in listener.incoming() {
-        dbg!(&listener,&stream);
         match stream {
             Ok(stream) => {
                 let files = files.clone();
